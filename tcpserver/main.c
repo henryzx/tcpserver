@@ -21,18 +21,19 @@ pthread_cond_t cond;
 int server_is_ready;
 
 int connect_to_server() {
+    sleep(1);
+    int err = 0;
     
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     
     char * inet_addr = "127.0.0.1";
-    int port = 13;
     
     struct sockaddr_in servaddr = {0};
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(port);
-    inet_pton(AF_INET, inet_addr, &servaddr.sin_addr);
+    servaddr.sin_port = htons(8888);
+    err = inet_pton(AF_INET, inet_addr, &servaddr.sin_addr);
     
-    connect(sockfd, (const struct sockaddr *) &servaddr, sizeof(servaddr));
+    err = connect(sockfd, (const struct sockaddr *) &servaddr, sizeof(servaddr));
     
     char buffer[MAX_LEN + 1];
     
@@ -42,25 +43,26 @@ int connect_to_server() {
         fputs(buffer, stdout);
     }
     
+    err = close(sockfd);
+    
     return 0;
 }
 
 void run_server() {
-
+    int err = 0;
+    
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
     
-    int opt = 1;
-    
-    setsockopt(AF_INET, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
+    // err = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
     
     struct sockaddr_in sockaddr = {0};
-    sockaddr.sin_port = 13;
+    sockaddr.sin_port = htons(8888);
     sockaddr.sin_family = AF_INET;
-    sockaddr.sin_addr.s_addr = INADDR_ANY;
+    sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     
-    bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
+    err = bind(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
     
-    listen(sockfd, 3);
+    err = listen(sockfd, 3);
     
     // notify
     
@@ -71,19 +73,15 @@ void run_server() {
     pthread_mutex_unlock(&lock);
     
     for(;;){
-        
-        socklen_t addrlen;
     
-        int client_sockfd = accept(sockfd, (struct sockaddr *)&sockaddr, &addrlen);
+        int client_sockfd = accept(sockfd, NULL, NULL);
     
         char * buffer = "hi";
         write(client_sockfd, buffer, strlen(buffer) + 1);
     
-        close(sockfd);
+        close(client_sockfd);
         
     }
-    
-    
 
 }
 
@@ -92,14 +90,14 @@ int main(int argc, const char * argv[]) {
     // insert code here...
     printf("Hello, World!\n");
     server_is_ready = 0;
-    pthread_t pid;
+    pthread_t thread;
     
     
     pthread_mutex_init(&lock, NULL);
     pthread_cond_init(&cond, NULL);
     
     // run server
-    pthread_create(&pid, NULL, &run_server, NULL);
+    pthread_create(&thread, NULL, &run_server, NULL);
     
     pthread_mutex_lock(&lock);
     while (!server_is_ready) {
@@ -111,10 +109,14 @@ int main(int argc, const char * argv[]) {
     // connect to server
     int err = connect_to_server();
     
+    pthread_join(thread, NULL);
+    
     // clean up
     
     pthread_mutex_destroy(&lock);
     pthread_cond_destroy(&cond);
+    
+
     
     return err;
 }
